@@ -1,6 +1,21 @@
 name: 'Wait'
 description: 'Wait a designated number of milliseconds'
 inputs:
+  shared_folder_paths:
+    description: 'File paths with list of locale folders to check in JSON or direct JSON string'
+    required: true
+  default_base:
+    description: 'Default base folder to compare from'
+    required: false
+    default: ''
+  compare_base:
+    description: 'Comparison base folder to compare from'
+    required: false
+    default: ''
+  compare_locales:
+    description: 'JSON array of locales to check against - these should match the folder names'
+    required: true
+    default: ''
   milliseconds:  # id of input
     description: 'number of milliseconds to wait'
     required: true

@@ -1694,23 +1694,244 @@ var __webpack_exports__ = {};
 // This entry need to be wrapped in an IIFE because it need to be isolated against other modules in the chunk.
 (() => {
 const core = __nccwpck_require__(186);
+const fs = __nccwpck_require__(747);
+const path = __nccwpck_require__(622);
 const wait = __nccwpck_require__(258);
 
+/**
+ * @typedef {Object} TranslationFileReport
+ * @property {string} defaultLocale
+ * @property {string} compareLocale
+ * @property {[string, string][]} keysToAdd
+ * @property {[string, string][]} keysToRemove
+ * @property {string[]} errors
+ */
 
 // most @actions toolkit packages have async methods
 async function run() {
   try {
+    const localeFolders = core.getInput('locale_folders', { required: true });
+
+    console.log('localeFolders: ', localeFolders)
+
+    /**
+     * @type {string[]} 
+     */
+    let baseFolderJSON;
+    try {
+      // try raw JSON string
+      baseFolderJSON = JSON.parse(localeFolders);
+    } catch (e) {
+      // else try reading as file
+      const baseFoldersTxt = fs.readFileSync(localeFolders, {
+        encoding: 'utf8',
+      });
+      baseFolderJSON = JSON.parse(baseFoldersTxt);
+    }
+
+    if (!validateBaseFolderInput(baseFolderJSON)) {
+      core.setFailed(
+        'Base locale folders JSON is is not an array of arrays with at least one entry in each array: ' +
+        localeFolders
+      );
+      return;
+    }
+
+    const defaultBase = core.getInput('default_base') || '';
+    const compareBase = core.getInput('compare_base') || '';
+    const compareLocalesJSON = core.getInput('compare_locales', {required: true});
+
+    const compareLocales = JSON.parse(compareLocalesJSON);
+    if (!Array.isArray(compareLocales)) {
+      core.setFailed('Array of comparison locale folder names not provided.');
+      return;
+    }
+
+    const comparisonReports = {};
+    compareLocales.forEach((locale) => {
+      const fileReports = compareTranslationsKeysForLocale(baseFolderJSON, defaultBase, compareBase, 'en', locale);
+      comparisonReports[locale] = fileReports;
+    });
+
     const ms = core.getInput('milliseconds');
     core.info(`Waiting ${ms} milliseconds ...`);
 
-    core.debug((new Date()).toTimeString()); // debug is only output if you set the secret `ACTIONS_RUNNER_DEBUG` to true
+    core.debug(new Date().toTimeString()); // debug is only output if you set the secret `ACTIONS_RUNNER_DEBUG` to true
     await wait(parseInt(ms));
-    core.info((new Date()).toTimeString());
+    core.info(new Date().toTimeString());
 
     core.setOutput('time', new Date().toTimeString());
   } catch (error) {
     core.setFailed(error.message);
   }
+}
+
+function validateBaseFolderInput(baseFolderJSON) {
+  let valid = false;
+
+  if (Array.isArray(baseFolderJSON) && baseFolderJSON.length > 0) {
+    valid = baseFolderJSON.every((entry) => {
+      const maybeValid = Array.isArray(entry) && entry.length > 0;
+      return maybeValid && typeof entry[0] === 'string'; // at least one path string defined
+    });
+  }
+  return valid;
+}
+
+/**
+ * 
+ * @param {[string, string][]} folderPaths 
+ * @param {string} defaultBase 
+ * @param {string} compareBase 
+ * @param {string} defaultLocale 
+ * @param {string} compareLocale 
+ * @returns 
+ */
+function compareTranslationsKeysForLocale(
+  folderPaths,
+  defaultBase,
+  compareBase,
+  defaultLocale,
+  compareLocale
+) {
+  /**
+   * @type {Object.<string, TranslationFileReport}>}
+   */
+  const pathToStringsReport = {};
+
+  folderPaths.forEach(([sharedPath, customPrefix]) => {
+    const defaultLocalePath = path.join(
+      defaultBase,
+      sharedPath,
+      defaultLocale
+    );
+    const compareLocalePath = path.join(
+      compareBase,
+      sharedPath,
+      compareLocale
+    );
+
+    try {
+      const defaultPaths =
+        getTranslationFilesAndKeyPrefixes(defaultLocalePath, customPrefix);
+
+      defaultPaths.forEach(({ full, file, prefix, subfolder}) => {
+        const defaultPathToOpen = path.normalize(full);
+        const compareFileToOpen = path.normalize(path.join(compareLocalePath, subfolder, file));
+
+        /**
+         * @type {TranslationFileReport}
+         */
+        const fileReport = {
+          defaultLocale,
+          compareLocale,
+          keysToAdd: [],
+          keysToRemove: [],
+          errors: [],
+        };
+
+        try {
+          const defaultTranslationsJSON = fs.readFileSync(defaultPathToOpen, 'utf8');
+          const defaultTranslations = JSON.parse(defaultTranslationsJSON);
+          
+          try {
+            const compareTranslationsJSON = fs.readFileSync(compareFileToOpen, 'utf8');
+            const compareTranslations = JSON.parse(compareTranslationsJSON);
+
+            const defaultKeys = getTranslationKeyPaths(prefix, defaultTranslations);
+            const compareKeys = getTranslationKeyPaths(prefix, compareTranslations);
+            const fullKeysToAdd = [...defaultKeys].filter((key) => !compareKeys.has(key));
+            const fullKeysToremove = [...compareKeys].filter((key) => !defaultKeys.has(key));
+
+            fileReport.keysToAdd = getFullAndFileRelativeKeys(prefix, fullKeysToAdd);
+            fileReport.keysToRemove = getFullAndFileRelativeKeys(prefix, fullKeysToremove);
+          } catch (e) {
+            // compareFileToOpen opening error
+            fileReport.errors.push(e.toString());
+          }
+        } catch (e) {
+          // defaultPathToOpen opening error
+          fileReport.errors.push(e.toString());
+        }
+
+        pathToStringsReport[compareFileToOpen] = fileReport;
+      });
+    } catch (e) {
+      core.error(e);
+    }
+  });
+
+  return pathToStringsReport;
+}
+
+/**
+ * Walk the directory and get translation.json file descriptors
+ * @param {string} dir
+ * @param {string} prefix
+ * @returns {{full: string, file: string, dir: string, prefix: string, subfolder: string}[]}
+ */
+function getTranslationFilesAndKeyPrefixes(dir, prefix = '', initRoot = null) {
+  const paths = [];
+  const root = initRoot || dir;
+
+  fs.readdirSync(dir).forEach((f) => {
+    const dirPath = path.join(dir, f);
+    const stat = fs.statSync(dirPath)
+    if (stat.isDirectory() && f.length > 0 && f[0] !== '.') {
+      paths.push(
+        ...getTranslationFilesAndKeyPrefixes(
+          dirPath,
+          prefix ? `${prefix}.${f}` : f,
+          root
+        )
+      );
+    } else if (stat.isFile() && f === 'translation.json') {
+      paths.push({ full: dirPath, file: f, dir, prefix, subfolder: path.relative(root, dir) });
+    }
+  });
+  return paths;
+}
+
+/**
+ * 
+ * @param {string} prefix 
+ * @param {string[]} keys 
+ * @returns 
+ */
+function getFullAndFileRelativeKeys(prefix, keys) {
+  const prefixLength = prefix?.length;
+  return keys.map((full) => [
+    full,
+    prefixLength > 0 ? full.slice(prefixLength + 1) : full,
+  ]);
+}
+
+/**
+ * 
+ * @param {string} keyPath 
+ * @param {{}} translationObject 
+ * @returns {Set<string>}
+ */
+function getTranslationKeyPaths(keyPath, translationObject) {
+  const keyPaths = new Set();
+  const prepend = keyPath?.length > 0 ? `${keyPath}.` : '';
+
+  Object.entries(translationObject).forEach(([key, value]) => {
+    const newKeyPath = `${prepend}${key}`;
+
+    if (typeof value === 'object') {
+      const translationValue = value?.['translation'];
+      if (typeof translationValue === 'string') {
+        // path is a translation object with actual string on "translation" value
+        keyPaths.add(newKeyPath);
+      } else {
+        keyPaths.add(getTranslationKeyPaths(newKeyPath, value));
+      }
+    } else {
+      keyPaths.add(newKeyPath);
+    }
+  });
+  return keyPaths;
 }
 
 run();
