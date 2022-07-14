@@ -1,7 +1,6 @@
 const core = require('@actions/core');
 const fs = require('fs');
 const path = require('path');
-const wait = require('./wait');
 
 /**
  * @typedef {Object} TranslationFileReport
@@ -15,9 +14,9 @@ const wait = require('./wait');
 // most @actions toolkit packages have async methods
 async function run() {
   try {
-    const sharedFolderPathsJSON = core.getInput('shared_folder_paths', { required: true });
+    const sharedFolderPathsParam = core.getInput('shared_folder_paths', { required: true });
 
-    console.log('sharedFolderPathsJSON: ', sharedFolderPathsJSON)
+    console.debug('sharedFolderPathsParam: ', sharedFolderPathsParam)
 
     /**
      * @type {string[]} 
@@ -25,27 +24,29 @@ async function run() {
     let sharedFolderPaths;
     try {
       // try raw JSON string
-      sharedFolderPaths = JSON.parse(sharedFolderPathsJSON);
+      sharedFolderPaths = JSON.parse(sharedFolderPathsParam);
     } catch (e) {
       // else try reading as file
-      const baseFoldersTxt = fs.readFileSync(sharedFolderPathsJSON, {
+      const sharedFolderPathsJSON = fs.readFileSync(sharedFolderPathsParam, {
         encoding: 'utf8',
       });
-      sharedFolderPaths = JSON.parse(baseFoldersTxt);
+      sharedFolderPaths = JSON.parse(sharedFolderPathsJSON);
     }
 
     if (!validateBaseFolderInput(sharedFolderPaths)) {
       core.setFailed(
         'Base locale folders JSON is is not an array of arrays with at least one entry in each array: ' +
-        sharedFolderPathsJSON
+        sharedFolderPathsParam
       );
       return;
     }
 
+    const defaultLocale = core.getInput('default_locale') || 'en';
     const defaultBase = core.getInput('default_base') || '';
     const compareBase = core.getInput('compare_base') || '';
-    const compareLocalesJSON = core.getInput('compare_locales', {required: true});
+    const compareLocalesJSON = core.getInput('compare_locales', { required: true });
 
+    core.info('Default locale: ', defaultLocale);
     const compareLocales = JSON.parse(compareLocalesJSON);
     if (!Array.isArray(compareLocales)) {
       core.setFailed('Array of comparison locale folder names not provided.');
@@ -55,11 +56,10 @@ async function run() {
     /**
      * @type Object.<string, Object.<string, TranslationFileReport>>
      */
-    const comparisonReports = {};
-    compareLocales.forEach((locale) => {
-      const fileReports = compareTranslationsKeysForLocale(sharedFolderPaths, defaultBase, compareBase, 'en', locale);
-      comparisonReports[locale] = fileReports;
-    });
+    const comparisonReports = compareLocales.reduce((prev, locale) => {
+      prev[locale] = compareTranslationsKeysForLocale(sharedFolderPaths, defaultBase, compareBase, defaultLocale, locale);
+      return prev;
+    }, {});
 
     Object.entries(comparisonReports).forEach(([locale, reports]) => {
       core.info(`Report for "${locale}":`);
@@ -83,14 +83,6 @@ async function run() {
       });
     });
 
-    const ms = core.getInput('milliseconds');
-    core.info(`Waiting ${ms} milliseconds ...`);
-
-    core.debug(new Date().toTimeString()); // debug is only output if you set the secret `ACTIONS_RUNNER_DEBUG` to true
-    await wait(parseInt(ms));
-    core.info(new Date().toTimeString());
-
-    core.setOutput('time', new Date().toTimeString());
     core.setOutput('comparisonReports', comparisonReports);
   } catch (error) {
     core.setFailed(error.message);
@@ -142,13 +134,13 @@ function compareTranslationsKeysForLocale(
       compareLocale
     );
 
-    core.info('PROCESSING sharedPath: ' + sharedPath);
+    core.debug('PROCESSING sharedPath: ' + sharedPath); // debug is only output if you set the secret `ACTIONS_RUNNER_DEBUG` to true
 
     try {
       const defaultPaths =
         getTranslationFilesAndKeyPrefixes(defaultLocalePath, customPrefix);
 
-      defaultPaths.forEach(({ full, file, prefix, subfolder}) => {
+      defaultPaths.forEach(({ full, file, prefix, subfolder }) => {
         const defaultPathToOpen = path.normalize(full);
         const compareFileToOpen = path.normalize(path.join(compareLocalePath, subfolder, file));
 
@@ -166,22 +158,25 @@ function compareTranslationsKeysForLocale(
         try {
           const defaultTranslationsJSON = fs.readFileSync(defaultPathToOpen, 'utf8');
           const defaultTranslations = JSON.parse(defaultTranslationsJSON);
-          
+
+          let compareTranslations;
           try {
             const compareTranslationsJSON = fs.readFileSync(compareFileToOpen, 'utf8');
-            const compareTranslations = JSON.parse(compareTranslationsJSON);
+            compareTranslations = JSON.parse(compareTranslationsJSON);
 
-            const defaultKeys = getTranslationKeyPaths(prefix, defaultTranslations);
-            const compareKeys = getTranslationKeyPaths(prefix, compareTranslations);
-            const fullKeysToAdd = [...defaultKeys].filter((key) => !compareKeys.has(key));
-            const fullKeysToremove = [...compareKeys].filter((key) => !defaultKeys.has(key));
 
-            fileReport.keysToAdd = getFullAndFileRelativeKeys(prefix, fullKeysToAdd);
-            fileReport.keysToRemove = getFullAndFileRelativeKeys(prefix, fullKeysToremove);
           } catch (e) {
             // compareFileToOpen opening error
             fileReport.errors.push(e.toString());
+            compareTranslations = {};
           }
+          const defaultKeys = getTranslationKeyPaths(prefix, defaultTranslations);
+          const compareKeys = getTranslationKeyPaths(prefix, compareTranslations);
+          const fullKeysToAdd = [...defaultKeys].filter((key) => !compareKeys.has(key));
+          const fullKeysToremove = [...compareKeys].filter((key) => !defaultKeys.has(key));
+
+          fileReport.keysToAdd = getFullAndFileRelativeKeys(prefix, fullKeysToAdd);
+          fileReport.keysToRemove = getFullAndFileRelativeKeys(prefix, fullKeysToremove);
         } catch (e) {
           // defaultPathToOpen opening error
           fileReport.errors.push(e.toString());
