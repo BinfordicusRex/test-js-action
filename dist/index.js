@@ -1710,29 +1710,29 @@ const wait = __nccwpck_require__(258);
 // most @actions toolkit packages have async methods
 async function run() {
   try {
-    const localeFolders = core.getInput('locale_folders', { required: true });
+    const sharedFolderPathsJSON = core.getInput('shared_folder_paths', { required: true });
 
-    console.log('localeFolders: ', localeFolders)
+    console.log('sharedFolderPathsJSON: ', sharedFolderPathsJSON)
 
     /**
      * @type {string[]} 
      */
-    let baseFolderJSON;
+    let sharedFolderPaths;
     try {
       // try raw JSON string
-      baseFolderJSON = JSON.parse(localeFolders);
+      sharedFolderPaths = JSON.parse(sharedFolderPathsJSON);
     } catch (e) {
       // else try reading as file
-      const baseFoldersTxt = fs.readFileSync(localeFolders, {
+      const baseFoldersTxt = fs.readFileSync(sharedFolderPathsJSON, {
         encoding: 'utf8',
       });
-      baseFolderJSON = JSON.parse(baseFoldersTxt);
+      sharedFolderPaths = JSON.parse(baseFoldersTxt);
     }
 
-    if (!validateBaseFolderInput(baseFolderJSON)) {
+    if (!validateBaseFolderInput(sharedFolderPaths)) {
       core.setFailed(
         'Base locale folders JSON is is not an array of arrays with at least one entry in each array: ' +
-        localeFolders
+        sharedFolderPathsJSON
       );
       return;
     }
@@ -1747,10 +1747,35 @@ async function run() {
       return;
     }
 
+    /**
+     * @type Object.<string, Object.<string, TranslationFileReport>>
+     */
     const comparisonReports = {};
     compareLocales.forEach((locale) => {
-      const fileReports = compareTranslationsKeysForLocale(baseFolderJSON, defaultBase, compareBase, 'en', locale);
+      const fileReports = compareTranslationsKeysForLocale(sharedFolderPaths, defaultBase, compareBase, 'en', locale);
       comparisonReports[locale] = fileReports;
+    });
+
+    Object.entries(comparisonReports).forEach(([locale, reports]) => {
+      core.info(`Report for "${locale}":`);
+
+      Object.entries(reports).forEach(([path, report]) => {
+        core.info(`  ${path}:`);
+        if (report.errors.length > 0) {
+          core.error(`    Errors`)
+        }
+        report.errors.forEach(error => core.error(`      ${error}`));
+
+        if (report.keysToAdd.length > 0) {
+          core.error(`    Keys to add:`)
+        }
+        report.keysToAdd.forEach(key => core.error(`      ${key}`));
+
+        if (report.keysToRemove.length > 0) {
+          core.error(`    Keys to remove:`)
+        }
+        report.keysToRemove.forEach(key => core.error(`      ${key}`));
+      });
     });
 
     const ms = core.getInput('milliseconds');
@@ -1761,6 +1786,7 @@ async function run() {
     core.info(new Date().toTimeString());
 
     core.setOutput('time', new Date().toTimeString());
+    core.setOutput('comparisonReports', comparisonReports);
   } catch (error) {
     core.setFailed(error.message);
   }
@@ -1810,6 +1836,8 @@ function compareTranslationsKeysForLocale(
       sharedPath,
       compareLocale
     );
+
+    core.info('PROCESSING sharedPath: ' + sharedPath);
 
     try {
       const defaultPaths =
@@ -1902,7 +1930,7 @@ function getFullAndFileRelativeKeys(prefix, keys) {
   const prefixLength = prefix?.length;
   return keys.map((full) => [
     full,
-    prefixLength > 0 ? full.slice(prefixLength + 1) : full,
+    prefixLength > 0 ? full?.slice(prefixLength + 1) : full,
   ]);
 }
 
@@ -1913,7 +1941,7 @@ function getFullAndFileRelativeKeys(prefix, keys) {
  * @returns {Set<string>}
  */
 function getTranslationKeyPaths(keyPath, translationObject) {
-  const keyPaths = new Set();
+  let keyPaths = new Set();
   const prepend = keyPath?.length > 0 ? `${keyPath}.` : '';
 
   Object.entries(translationObject).forEach(([key, value]) => {
@@ -1925,7 +1953,7 @@ function getTranslationKeyPaths(keyPath, translationObject) {
         // path is a translation object with actual string on "translation" value
         keyPaths.add(newKeyPath);
       } else {
-        keyPaths.add(getTranslationKeyPaths(newKeyPath, value));
+        keyPaths = new Set([...keyPaths.values(), ...getTranslationKeyPaths(newKeyPath, value).values()]);
       }
     } else {
       keyPaths.add(newKeyPath);
