@@ -1555,23 +1555,6 @@ exports.debug = debug; // for test
 
 /***/ }),
 
-/***/ 258:
-/***/ ((module) => {
-
-let wait = function (milliseconds) {
-  return new Promise((resolve) => {
-    if (typeof milliseconds !== 'number') {
-      throw new Error('milliseconds not a number');
-    }
-    setTimeout(() => resolve("done!"), milliseconds)
-  });
-};
-
-module.exports = wait;
-
-
-/***/ }),
-
 /***/ 357:
 /***/ ((module) => {
 
@@ -1684,10 +1667,105 @@ module.exports = require("util");
 /******/ 		return module.exports;
 /******/ 	}
 /******/ 	
+/******/ 	// expose the modules object (__webpack_modules__)
+/******/ 	__nccwpck_require__.m = __webpack_modules__;
+/******/ 	
 /************************************************************************/
+/******/ 	/* webpack/runtime/define property getters */
+/******/ 	(() => {
+/******/ 		// define getter functions for harmony exports
+/******/ 		__nccwpck_require__.d = (exports, definition) => {
+/******/ 			for(var key in definition) {
+/******/ 				if(__nccwpck_require__.o(definition, key) && !__nccwpck_require__.o(exports, key)) {
+/******/ 					Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
+/******/ 				}
+/******/ 			}
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/ensure chunk */
+/******/ 	(() => {
+/******/ 		__nccwpck_require__.f = {};
+/******/ 		// This file contains only the entry chunk.
+/******/ 		// The chunk loading function for additional chunks
+/******/ 		__nccwpck_require__.e = (chunkId) => {
+/******/ 			return Promise.all(Object.keys(__nccwpck_require__.f).reduce((promises, key) => {
+/******/ 				__nccwpck_require__.f[key](chunkId, promises);
+/******/ 				return promises;
+/******/ 			}, []));
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/get javascript chunk filename */
+/******/ 	(() => {
+/******/ 		// This function allow to reference async chunks
+/******/ 		__nccwpck_require__.u = (chunkId) => {
+/******/ 			// return url for filenames based on template
+/******/ 			return "" + chunkId + ".index.js";
+/******/ 		};
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/hasOwnProperty shorthand */
+/******/ 	(() => {
+/******/ 		__nccwpck_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
+/******/ 	})();
+/******/ 	
+/******/ 	/* webpack/runtime/make namespace object */
+/******/ 	(() => {
+/******/ 		// define __esModule on exports
+/******/ 		__nccwpck_require__.r = (exports) => {
+/******/ 			if(typeof Symbol !== 'undefined' && Symbol.toStringTag) {
+/******/ 				Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+/******/ 			}
+/******/ 			Object.defineProperty(exports, '__esModule', { value: true });
+/******/ 		};
+/******/ 	})();
+/******/ 	
 /******/ 	/* webpack/runtime/compat */
 /******/ 	
 /******/ 	if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = __dirname + "/";
+/******/ 	
+/******/ 	/* webpack/runtime/require chunk loading */
+/******/ 	(() => {
+/******/ 		// no baseURI
+/******/ 		
+/******/ 		// object to store loaded chunks
+/******/ 		// "1" means "loaded", otherwise not loaded yet
+/******/ 		var installedChunks = {
+/******/ 			179: 1
+/******/ 		};
+/******/ 		
+/******/ 		// no on chunks loaded
+/******/ 		
+/******/ 		var installChunk = (chunk) => {
+/******/ 			var moreModules = chunk.modules, chunkIds = chunk.ids, runtime = chunk.runtime;
+/******/ 			for(var moduleId in moreModules) {
+/******/ 				if(__nccwpck_require__.o(moreModules, moduleId)) {
+/******/ 					__nccwpck_require__.m[moduleId] = moreModules[moduleId];
+/******/ 				}
+/******/ 			}
+/******/ 			if(runtime) runtime(__nccwpck_require__);
+/******/ 			for(var i = 0; i < chunkIds.length; i++)
+/******/ 				installedChunks[chunkIds[i]] = 1;
+/******/ 		
+/******/ 		};
+/******/ 		
+/******/ 		// require() chunk loading for javascript
+/******/ 		__nccwpck_require__.f.require = (chunkId, promises) => {
+/******/ 			// "1" is the signal for "already loaded"
+/******/ 			if(!installedChunks[chunkId]) {
+/******/ 				if(true) { // all chunks have JS
+/******/ 					installChunk(require("./" + __nccwpck_require__.u(chunkId)));
+/******/ 				} else installedChunks[chunkId] = 1;
+/******/ 			}
+/******/ 		};
+/******/ 		
+/******/ 		// no external install chunk
+/******/ 		
+/******/ 		// no HMR
+/******/ 		
+/******/ 		// no HMR manifest
+/******/ 	})();
 /******/ 	
 /************************************************************************/
 var __webpack_exports__ = {};
@@ -1696,7 +1774,6 @@ var __webpack_exports__ = {};
 const core = __nccwpck_require__(186);
 const fs = __nccwpck_require__(747);
 const path = __nccwpck_require__(622);
-const wait = __nccwpck_require__(258);
 
 /**
  * @typedef {Object} TranslationFileReport
@@ -1710,9 +1787,9 @@ const wait = __nccwpck_require__(258);
 // most @actions toolkit packages have async methods
 async function run() {
   try {
-    const sharedFolderPathsJSON = core.getInput('shared_folder_paths', { required: true });
+    const sharedFolderPathsParam = core.getInput('shared_folder_paths', { required: true });
 
-    console.log('sharedFolderPathsJSON: ', sharedFolderPathsJSON)
+    console.debug('sharedFolderPathsParam: ', sharedFolderPathsParam)
 
     /**
      * @type {string[]} 
@@ -1720,27 +1797,29 @@ async function run() {
     let sharedFolderPaths;
     try {
       // try raw JSON string
-      sharedFolderPaths = JSON.parse(sharedFolderPathsJSON);
+      sharedFolderPaths = JSON.parse(sharedFolderPathsParam);
     } catch (e) {
       // else try reading as file
-      const baseFoldersTxt = fs.readFileSync(sharedFolderPathsJSON, {
+      const sharedFolderPathsJSON = fs.readFileSync(sharedFolderPathsParam, {
         encoding: 'utf8',
       });
-      sharedFolderPaths = JSON.parse(baseFoldersTxt);
+      sharedFolderPaths = JSON.parse(sharedFolderPathsJSON);
     }
 
     if (!validateBaseFolderInput(sharedFolderPaths)) {
       core.setFailed(
         'Base locale folders JSON is is not an array of arrays with at least one entry in each array: ' +
-        sharedFolderPathsJSON
+        sharedFolderPathsParam
       );
       return;
     }
 
+    const defaultLocale = core.getInput('default_locale') || 'en';
     const defaultBase = core.getInput('default_base') || '';
     const compareBase = core.getInput('compare_base') || '';
-    const compareLocalesJSON = core.getInput('compare_locales', {required: true});
+    const compareLocalesJSON = core.getInput('compare_locales', { required: true });
 
+    core.info('Default locale: ', defaultLocale);
     const compareLocales = JSON.parse(compareLocalesJSON);
     if (!Array.isArray(compareLocales)) {
       core.setFailed('Array of comparison locale folder names not provided.');
@@ -1750,46 +1829,74 @@ async function run() {
     /**
      * @type Object.<string, Object.<string, TranslationFileReport>>
      */
-    const comparisonReports = {};
-    compareLocales.forEach((locale) => {
-      const fileReports = compareTranslationsKeysForLocale(sharedFolderPaths, defaultBase, compareBase, 'en', locale);
-      comparisonReports[locale] = fileReports;
-    });
+    const comparisonReports = compareLocales.reduce((prev, locale) => {
+      prev[locale] = compareTranslationsKeysForLocale(sharedFolderPaths, defaultBase, compareBase, defaultLocale, locale);
+      return prev;
+    }, {});
 
-    Object.entries(comparisonReports).forEach(([locale, reports]) => {
-      core.info(`Report for "${locale}":`);
+    await prettyPringComparisonReport(comparisonReports, defaultLocale);
 
-      Object.entries(reports).forEach(([path, report]) => {
-        core.info(`  ${path}:`);
-        if (report.errors.length > 0) {
-          core.error(`    Errors`)
-        }
-        report.errors.forEach(error => core.error(`      ${error}`));
-
-        if (report.keysToAdd.length > 0) {
-          core.error(`    Keys to add:`)
-        }
-        report.keysToAdd.forEach(key => core.error(`      ${key}`));
-
-        if (report.keysToRemove.length > 0) {
-          core.error(`    Keys to remove:`)
-        }
-        report.keysToRemove.forEach(key => core.error(`      ${key}`));
-      });
-    });
-
-    const ms = core.getInput('milliseconds');
-    core.info(`Waiting ${ms} milliseconds ...`);
-
-    core.debug(new Date().toTimeString()); // debug is only output if you set the secret `ACTIONS_RUNNER_DEBUG` to true
-    await wait(parseInt(ms));
-    core.info(new Date().toTimeString());
-
-    core.setOutput('time', new Date().toTimeString());
     core.setOutput('comparisonReports', comparisonReports);
   } catch (error) {
     core.setFailed(error.message);
   }
+}
+
+/**
+ * 
+ * @param {Object.<string, Object.<string, TranslationFileReport>>} comparisonReports
+ * @param {string} defaultLocale
+ */
+async function prettyPringComparisonReport(comparisonReports, defaultLocale) {
+  const { default: styles } = await __nccwpck_require__.e(/* import() */ 68).then(__nccwpck_require__.bind(__nccwpck_require__, 68));
+  core.notice(`${styles.bold.open}Comparing languages against default locale: "${defaultLocale}"${styles.bold.close}`);
+
+  Object.entries(comparisonReports).forEach(([locale, reports]) => {
+    const localeReportTitle = `Report for "${locale}":`;
+    core.startGroup(localeReportTitle);
+    const output = [];
+    let localErrors = false;
+    Object.entries(reports).forEach(([path, report]) => {
+      const pathErrors = report.errors.length > 0 || report.keysToAdd.length > 0 || report.keysToRemove.length > 0;
+      localErrors = localErrors || pathErrors;
+
+      const pathStyle = pathErrors ? styles.redBright : styles.greenBright;
+
+      output.push([getStyledText(pathStyle, `  ${path} ${pathErrors ? '✖' : '✓'}`), pathErrors]);
+
+      if (report.errors.length > 0) {
+        output.push([getStyledText(pathStyle, `    Errors:`), pathErrors])
+      }
+      report.errors.forEach(error => output.push([getStyledText(pathStyle, `      ✖ ${error}`), pathErrors]));
+
+      if (report.keysToAdd.length > 0) {
+        output.push([getStyledText(pathStyle, `    Keys to add:`), pathErrors])
+      }
+      report.keysToAdd.forEach(([fullKey, fileKey]) => output.push([getStyledText(pathStyle, `      + ${fullKey} (${fileKey})`), pathErrors]));
+
+      if (report.keysToRemove.length > 0) {
+        output.push([getStyledText(pathStyle, `    Keys to remove:`), pathErrors])
+      }
+      report.keysToRemove.forEach(([fullKey, fileKey]) => output.push([getStyledText(pathStyle, `      - ${fullKey} (${fileKey})`), pathErrors]));
+    });
+
+    if (localErrors) {
+      core.error(getStyledText(styles.redBright, localeReportTitle + ' ✖'));
+    } else {
+      core.notice(getStyledText(styles.greenBright, localeReportTitle + ' ✓'));
+    }
+    output.forEach(([msg, error]) => error ? core.error(msg) : core.notice(msg));
+    core.endGroup();
+  });
+}
+
+/**
+ * 
+ * @param {{}}} style 
+ * @param {string} text 
+ */
+function getStyledText(style, text) {
+  return `${style.open}${text}${style.close}`
 }
 
 function validateBaseFolderInput(baseFolderJSON) {
@@ -1837,13 +1944,13 @@ function compareTranslationsKeysForLocale(
       compareLocale
     );
 
-    core.info('PROCESSING sharedPath: ' + sharedPath);
+    core.debug('PROCESSING sharedPath: ' + sharedPath); // debug is only output if you set the secret `ACTIONS_RUNNER_DEBUG` to true
 
     try {
       const defaultPaths =
         getTranslationFilesAndKeyPrefixes(defaultLocalePath, customPrefix);
 
-      defaultPaths.forEach(({ full, file, prefix, subfolder}) => {
+      defaultPaths.forEach(({ full, file, prefix, subfolder }) => {
         const defaultPathToOpen = path.normalize(full);
         const compareFileToOpen = path.normalize(path.join(compareLocalePath, subfolder, file));
 
@@ -1861,22 +1968,25 @@ function compareTranslationsKeysForLocale(
         try {
           const defaultTranslationsJSON = fs.readFileSync(defaultPathToOpen, 'utf8');
           const defaultTranslations = JSON.parse(defaultTranslationsJSON);
-          
+
+          let compareTranslations;
           try {
             const compareTranslationsJSON = fs.readFileSync(compareFileToOpen, 'utf8');
-            const compareTranslations = JSON.parse(compareTranslationsJSON);
+            compareTranslations = JSON.parse(compareTranslationsJSON);
 
-            const defaultKeys = getTranslationKeyPaths(prefix, defaultTranslations);
-            const compareKeys = getTranslationKeyPaths(prefix, compareTranslations);
-            const fullKeysToAdd = [...defaultKeys].filter((key) => !compareKeys.has(key));
-            const fullKeysToremove = [...compareKeys].filter((key) => !defaultKeys.has(key));
 
-            fileReport.keysToAdd = getFullAndFileRelativeKeys(prefix, fullKeysToAdd);
-            fileReport.keysToRemove = getFullAndFileRelativeKeys(prefix, fullKeysToremove);
           } catch (e) {
             // compareFileToOpen opening error
             fileReport.errors.push(e.toString());
+            compareTranslations = {};
           }
+          const defaultKeys = getTranslationKeyPaths(prefix, defaultTranslations);
+          const compareKeys = getTranslationKeyPaths(prefix, compareTranslations);
+          const fullKeysToAdd = [...defaultKeys].filter((key) => !compareKeys.has(key));
+          const fullKeysToremove = [...compareKeys].filter((key) => !defaultKeys.has(key));
+
+          fileReport.keysToAdd = getFullAndFileRelativeKeys(prefix, fullKeysToAdd);
+          fileReport.keysToRemove = getFullAndFileRelativeKeys(prefix, fullKeysToremove);
         } catch (e) {
           // defaultPathToOpen opening error
           fileReport.errors.push(e.toString());
@@ -1885,6 +1995,7 @@ function compareTranslationsKeysForLocale(
         pathToStringsReport[compareFileToOpen] = fileReport;
       });
     } catch (e) {
+      // file walking error
       core.error(e);
     }
   });

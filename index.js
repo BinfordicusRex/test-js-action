@@ -61,32 +61,69 @@ async function run() {
       return prev;
     }, {});
 
-    Object.entries(comparisonReports).forEach(([locale, reports]) => {
-      core.info(`Report for "${locale}":`);
-
-      Object.entries(reports).forEach(([path, report]) => {
-        core.info(`  ${path}:`);
-        if (report.errors.length > 0) {
-          core.error(`    Errors`)
-        }
-        report.errors.forEach(error => core.error(`      ${error}`));
-
-        if (report.keysToAdd.length > 0) {
-          core.error(`    Keys to add:`)
-        }
-        report.keysToAdd.forEach(key => core.error(`      ${key}`));
-
-        if (report.keysToRemove.length > 0) {
-          core.error(`    Keys to remove:`)
-        }
-        report.keysToRemove.forEach(key => core.error(`      ${key}`));
-      });
-    });
+    await prettyPringComparisonReport(comparisonReports, defaultLocale);
 
     core.setOutput('comparisonReports', comparisonReports);
   } catch (error) {
     core.setFailed(error.message);
   }
+}
+
+/**
+ * 
+ * @param {Object.<string, Object.<string, TranslationFileReport>>} comparisonReports
+ * @param {string} defaultLocale
+ */
+async function prettyPringComparisonReport(comparisonReports, defaultLocale) {
+  const { default: styles } = await import('ansi-styles');
+  core.notice(`${styles.bold.open}Comparing languages against default locale: "${defaultLocale}"${styles.bold.close}`);
+
+  Object.entries(comparisonReports).forEach(([locale, reports]) => {
+    const localeReportTitle = `Report for "${locale}":`;
+    core.startGroup(localeReportTitle);
+    const output = [];
+    let localErrors = false;
+    Object.entries(reports).forEach(([path, report]) => {
+      const pathErrors = report.errors.length > 0 || report.keysToAdd.length > 0 || report.keysToRemove.length > 0;
+      localErrors = localErrors || pathErrors;
+
+      const pathStyle = pathErrors ? styles.redBright : styles.greenBright;
+
+      output.push([getStyledText(pathStyle, `  ${path} ${pathErrors ? '✖' : '✓'}`), pathErrors]);
+
+      if (report.errors.length > 0) {
+        output.push([getStyledText(pathStyle, `    Errors:`), pathErrors])
+      }
+      report.errors.forEach(error => output.push([getStyledText(pathStyle, `      ✖ ${error}`), pathErrors]));
+
+      if (report.keysToAdd.length > 0) {
+        output.push([getStyledText(pathStyle, `    Keys to add:`), pathErrors])
+      }
+      report.keysToAdd.forEach(([fullKey, fileKey]) => output.push([getStyledText(pathStyle, `      + ${fullKey} (${fileKey})`), pathErrors]));
+
+      if (report.keysToRemove.length > 0) {
+        output.push([getStyledText(pathStyle, `    Keys to remove:`), pathErrors])
+      }
+      report.keysToRemove.forEach(([fullKey, fileKey]) => output.push([getStyledText(pathStyle, `      - ${fullKey} (${fileKey})`), pathErrors]));
+    });
+
+    if (localErrors) {
+      core.error(getStyledText(styles.redBright, localeReportTitle + ' ✖'));
+    } else {
+      core.notice(getStyledText(styles.greenBright, localeReportTitle + ' ✓'));
+    }
+    output.forEach(([msg, error]) => error ? core.error(msg) : core.notice(msg));
+    core.endGroup();
+  });
+}
+
+/**
+ * 
+ * @param {{}}} style 
+ * @param {string} text 
+ */
+function getStyledText(style, text) {
+  return `${style.open}${text}${style.close}`
 }
 
 function validateBaseFolderInput(baseFolderJSON) {
@@ -185,6 +222,7 @@ function compareTranslationsKeysForLocale(
         pathToStringsReport[compareFileToOpen] = fileReport;
       });
     } catch (e) {
+      // file walking error
       core.error(e);
     }
   });
