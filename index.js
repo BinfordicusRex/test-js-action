@@ -9,17 +9,24 @@ const path = require('path');
  * @property {[string, string][]} keysToAdd
  * @property {[string, string][]} keysToRemove
  * @property {string[]} errors
+ * 
+ * @typedef {Object.<string, TranslationFileReport>} TranslationFileReportsMap
+ * 
+ * @typedef {Object.<string, TranslationFileReportsMap>} TranslationLocalesReportsMap
  */
+
 
 // most @actions toolkit packages have async methods
 async function run() {
   try {
-    const sharedFolderPathsParam = core.getInput('shared_folder_paths', { required: true });
+    const sharedFolderPathsParam = core.getInput('shared_folder_paths', {
+      required: true,
+    });
 
-    console.debug('sharedFolderPathsParam: ', sharedFolderPathsParam)
+    console.debug('sharedFolderPathsParam: ', sharedFolderPathsParam);
 
     /**
-     * @type {string[]} 
+     * @type {string[]}
      */
     let sharedFolderPaths;
     try {
@@ -36,7 +43,7 @@ async function run() {
     if (!validateBaseFolderInput(sharedFolderPaths)) {
       core.setFailed(
         'Base locale folders JSON is is not an array of arrays with at least one entry in each array: ' +
-        sharedFolderPathsParam
+          sharedFolderPathsParam
       );
       return;
     }
@@ -44,7 +51,9 @@ async function run() {
     const defaultLocale = core.getInput('default_locale') || 'en';
     const defaultBase = core.getInput('default_base') || '';
     const compareBase = core.getInput('compare_base') || '';
-    const compareLocalesJSON = core.getInput('compare_locales', { required: true });
+    const compareLocalesJSON = core.getInput('compare_locales', {
+      required: true,
+    });
 
     core.info('Default locale: ', defaultLocale);
     const compareLocales = JSON.parse(compareLocalesJSON);
@@ -54,10 +63,16 @@ async function run() {
     }
 
     /**
-     * @type Object.<string, Object.<string, TranslationFileReport>>
+     * @type TranslationLocalesReportsMap
      */
     const comparisonReports = compareLocales.reduce((prev, locale) => {
-      prev[locale] = compareTranslationsKeysForLocale(sharedFolderPaths, defaultBase, compareBase, defaultLocale, locale);
+      prev[locale] = compareTranslationsKeysForLocale(
+        sharedFolderPaths,
+        defaultBase,
+        compareBase,
+        defaultLocale,
+        locale
+      );
       return prev;
     }, {});
 
@@ -70,13 +85,44 @@ async function run() {
 }
 
 /**
- * 
- * @param {Object.<string, Object.<string, TranslationFileReport>>} comparisonReports
+ *
+ * @param {TranslationLocalesReportsMap>} comparisonReports
+ * @returns Totals for comparison report
+ */
+function getTotals(comparisonReports) {
+  return Object.values(comparisonReports).reduce(
+    (prevOuter, fileReports) =>
+      Object.values(fileReports).reduce((prev, fileReport) => {
+        prev.totalKeysToAdd += fileReport.keysToAdd.length;
+        prev.totalKeysToRemove += fileReport.keysToRemove.length;
+        return prev;
+      }, prevOuter),
+    {totalKeysToAdd: 0, totalKeysToRemove: 0}
+  );
+}
+
+/**
+ *
+ * @param {TranslationLocalesReportsMap} comparisonReports
  * @param {string} defaultLocale
  */
 async function prettyPringComparisonReport(comparisonReports, defaultLocale) {
-  const { default: styles } = await import('ansi-styles');
-  core.notice(`${styles.bold.open}Comparing languages against default locale: "${defaultLocale}"${styles.bold.close}`);
+  const {default: styles} = await import('ansi-styles');
+  core.notice(
+    getStyledText(
+      styles.bold,
+      `Comparing languages against default locale: "${defaultLocale}"`
+    )
+  );
+
+  const {totalKeysToAdd, totalKeysToRemove} = getTotals(comparisonReports);
+
+  core.notice(
+    `Total keys to add: ${getStyledText(
+      styles.bold,
+      totalKeysToAdd
+    )}, Total keys to remove: ${getStyledText(styles.bold, totalKeysToRemove)}`
+  );
 
   Object.entries(comparisonReports).forEach(([locale, reports]) => {
     const localeReportTitle = `Report for "${locale}":`;
@@ -84,27 +130,48 @@ async function prettyPringComparisonReport(comparisonReports, defaultLocale) {
     const output = [];
     let localErrors = false;
     Object.entries(reports).forEach(([path, report]) => {
-      const pathErrors = report.errors.length > 0 || report.keysToAdd.length > 0 || report.keysToRemove.length > 0;
+      const pathErrors =
+        report.errors.length > 0 ||
+        report.keysToAdd.length > 0 ||
+        report.keysToRemove.length > 0;
       localErrors = localErrors || pathErrors;
 
       const pathStyle = pathErrors ? styles.redBright : styles.greenBright;
 
-      output.push([getStyledText(pathStyle, `  ${path} ${pathErrors ? '✖' : '✓'}`), pathErrors]);
+      output.push([
+        getStyledText(pathStyle, `  ${path} ${pathErrors ? '✖' : '✓'}`),
+        pathErrors,
+      ]);
 
       if (report.errors.length > 0) {
-        output.push([getStyledText(pathStyle, `    Errors:`), pathErrors])
+        output.push([getStyledText(pathStyle, `    Errors:`), pathErrors]);
       }
-      report.errors.forEach(error => output.push([getStyledText(pathStyle, `      ✖ ${error}`), pathErrors]));
+      report.errors.forEach((error) =>
+        output.push([getStyledText(pathStyle, `      ✖ ${error}`), pathErrors])
+      );
 
       if (report.keysToAdd.length > 0) {
-        output.push([getStyledText(pathStyle, `    Keys to add:`), pathErrors])
+        output.push([getStyledText(pathStyle, `    Keys to add:`), pathErrors]);
       }
-      report.keysToAdd.forEach(([fullKey, fileKey]) => output.push([getStyledText(pathStyle, `      + ${fullKey} (${fileKey})`), pathErrors]));
+      report.keysToAdd.forEach(([fullKey, fileKey]) =>
+        output.push([
+          getStyledText(pathStyle, `      + ${fullKey} (${fileKey})`),
+          pathErrors,
+        ])
+      );
 
       if (report.keysToRemove.length > 0) {
-        output.push([getStyledText(pathStyle, `    Keys to remove:`), pathErrors])
+        output.push([
+          getStyledText(pathStyle, `    Keys to remove:`),
+          pathErrors,
+        ]);
       }
-      report.keysToRemove.forEach(([fullKey, fileKey]) => output.push([getStyledText(pathStyle, `      - ${fullKey} (${fileKey})`), pathErrors]));
+      report.keysToRemove.forEach(([fullKey, fileKey]) =>
+        output.push([
+          getStyledText(pathStyle, `      - ${fullKey} (${fileKey})`),
+          pathErrors,
+        ])
+      );
     });
 
     if (localErrors) {
@@ -112,18 +179,20 @@ async function prettyPringComparisonReport(comparisonReports, defaultLocale) {
     } else {
       core.notice(getStyledText(styles.greenBright, localeReportTitle + ' ✓'));
     }
-    output.forEach(([msg, error]) => error ? core.error(msg) : core.notice(msg));
+    output.forEach(([msg, error]) =>
+      error ? core.error(msg) : core.notice(msg)
+    );
     core.endGroup();
   });
 }
 
 /**
- * 
- * @param {{}}} style 
- * @param {string} text 
+ *
+ * @param {{}}} style
+ * @param {string} text
  */
 function getStyledText(style, text) {
-  return `${style.open}${text}${style.close}`
+  return `${style.open}${text}${style.close}`;
 }
 
 function validateBaseFolderInput(baseFolderJSON) {
@@ -139,13 +208,13 @@ function validateBaseFolderInput(baseFolderJSON) {
 }
 
 /**
- * 
- * @param {[string, string][]} folderPaths 
- * @param {string} defaultBase 
- * @param {string} compareBase 
- * @param {string} defaultLocale 
- * @param {string} compareLocale 
- * @returns 
+ *
+ * @param {[string, string][]} folderPaths
+ * @param {string} defaultBase
+ * @param {string} compareBase
+ * @param {string} defaultLocale
+ * @param {string} compareLocale
+ * @returns
  */
 function compareTranslationsKeysForLocale(
   folderPaths,
@@ -160,26 +229,22 @@ function compareTranslationsKeysForLocale(
   const pathToStringsReport = {};
 
   folderPaths.forEach(([sharedPath, customPrefix]) => {
-    const defaultLocalePath = path.join(
-      defaultBase,
-      sharedPath,
-      defaultLocale
-    );
-    const compareLocalePath = path.join(
-      compareBase,
-      sharedPath,
-      compareLocale
-    );
+    const defaultLocalePath = path.join(defaultBase, sharedPath, defaultLocale);
+    const compareLocalePath = path.join(compareBase, sharedPath, compareLocale);
 
     core.debug('PROCESSING sharedPath: ' + sharedPath); // debug is only output if you set the secret `ACTIONS_RUNNER_DEBUG` to true
 
     try {
-      const defaultPaths =
-        getTranslationFilesAndKeyPrefixes(defaultLocalePath, customPrefix);
+      const defaultPaths = getTranslationFilesAndKeyPrefixes(
+        defaultLocalePath,
+        customPrefix
+      );
 
-      defaultPaths.forEach(({ full, file, prefix, subfolder }) => {
+      defaultPaths.forEach(({full, file, prefix, subfolder}) => {
         const defaultPathToOpen = path.normalize(full);
-        const compareFileToOpen = path.normalize(path.join(compareLocalePath, subfolder, file));
+        const compareFileToOpen = path.normalize(
+          path.join(compareLocalePath, subfolder, file)
+        );
 
         /**
          * @type {TranslationFileReport}
@@ -193,27 +258,47 @@ function compareTranslationsKeysForLocale(
         };
 
         try {
-          const defaultTranslationsJSON = fs.readFileSync(defaultPathToOpen, 'utf8');
+          const defaultTranslationsJSON = fs.readFileSync(
+            defaultPathToOpen,
+            'utf8'
+          );
           const defaultTranslations = JSON.parse(defaultTranslationsJSON);
 
           let compareTranslations;
           try {
-            const compareTranslationsJSON = fs.readFileSync(compareFileToOpen, 'utf8');
+            const compareTranslationsJSON = fs.readFileSync(
+              compareFileToOpen,
+              'utf8'
+            );
             compareTranslations = JSON.parse(compareTranslationsJSON);
-
-
           } catch (e) {
             // compareFileToOpen opening error
             fileReport.errors.push(e.toString());
             compareTranslations = {};
           }
-          const defaultKeys = getTranslationKeyPaths(prefix, defaultTranslations);
-          const compareKeys = getTranslationKeyPaths(prefix, compareTranslations);
-          const fullKeysToAdd = [...defaultKeys].filter((key) => !compareKeys.has(key));
-          const fullKeysToremove = [...compareKeys].filter((key) => !defaultKeys.has(key));
+          const defaultKeys = getTranslationKeyPaths(
+            prefix,
+            defaultTranslations
+          );
+          const compareKeys = getTranslationKeyPaths(
+            prefix,
+            compareTranslations
+          );
+          const fullKeysToAdd = [...defaultKeys].filter(
+            (key) => !compareKeys.has(key)
+          );
+          const fullKeysToremove = [...compareKeys].filter(
+            (key) => !defaultKeys.has(key)
+          );
 
-          fileReport.keysToAdd = getFullAndFileRelativeKeys(prefix, fullKeysToAdd);
-          fileReport.keysToRemove = getFullAndFileRelativeKeys(prefix, fullKeysToremove);
+          fileReport.keysToAdd = getFullAndFileRelativeKeys(
+            prefix,
+            fullKeysToAdd
+          );
+          fileReport.keysToRemove = getFullAndFileRelativeKeys(
+            prefix,
+            fullKeysToremove
+          );
         } catch (e) {
           // defaultPathToOpen opening error
           fileReport.errors.push(e.toString());
@@ -242,7 +327,7 @@ function getTranslationFilesAndKeyPrefixes(dir, prefix = '', initRoot = null) {
 
   fs.readdirSync(dir).forEach((f) => {
     const dirPath = path.join(dir, f);
-    const stat = fs.statSync(dirPath)
+    const stat = fs.statSync(dirPath);
     if (stat.isDirectory() && f.length > 0 && f[0] !== '.') {
       paths.push(
         ...getTranslationFilesAndKeyPrefixes(
@@ -252,17 +337,23 @@ function getTranslationFilesAndKeyPrefixes(dir, prefix = '', initRoot = null) {
         )
       );
     } else if (stat.isFile() && f === 'translation.json') {
-      paths.push({ full: dirPath, file: f, dir, prefix, subfolder: path.relative(root, dir) });
+      paths.push({
+        full: dirPath,
+        file: f,
+        dir,
+        prefix,
+        subfolder: path.relative(root, dir),
+      });
     }
   });
   return paths;
 }
 
 /**
- * 
- * @param {string} prefix 
- * @param {string[]} keys 
- * @returns 
+ *
+ * @param {string} prefix
+ * @param {string[]} keys
+ * @returns
  */
 function getFullAndFileRelativeKeys(prefix, keys) {
   const prefixLength = prefix?.length;
@@ -273,9 +364,9 @@ function getFullAndFileRelativeKeys(prefix, keys) {
 }
 
 /**
- * 
- * @param {string} keyPath 
- * @param {{}} translationObject 
+ *
+ * @param {string} keyPath
+ * @param {{}} translationObject
  * @returns {Set<string>}
  */
 function getTranslationKeyPaths(keyPath, translationObject) {
@@ -291,7 +382,10 @@ function getTranslationKeyPaths(keyPath, translationObject) {
         // path is a translation object with actual string on "translation" value
         keyPaths.add(newKeyPath);
       } else {
-        keyPaths = new Set([...keyPaths.values(), ...getTranslationKeyPaths(newKeyPath, value).values()]);
+        keyPaths = new Set([
+          ...keyPaths.values(),
+          ...getTranslationKeyPaths(newKeyPath, value).values(),
+        ]);
       }
     } else {
       keyPaths.add(newKeyPath);
@@ -299,5 +393,7 @@ function getTranslationKeyPaths(keyPath, translationObject) {
   });
   return keyPaths;
 }
+
+// Execute the script
 
 run();
