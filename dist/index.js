@@ -1,7 +1,7 @@
 require('./sourcemap-register.js');/******/ (() => { // webpackBootstrap
 /******/ 	var __webpack_modules__ = ({
 
-/***/ 351:
+/***/ 241:
 /***/ (function(__unused_webpack_module, exports, __nccwpck_require__) {
 
 "use strict";
@@ -135,7 +135,7 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", ({ value: true }));
 exports.getIDToken = exports.getState = exports.saveState = exports.group = exports.endGroup = exports.startGroup = exports.info = exports.notice = exports.warning = exports.error = exports.debug = exports.isDebug = exports.setFailed = exports.setCommandEcho = exports.setOutput = exports.getBooleanInput = exports.getMultilineInput = exports.getInput = exports.addPath = exports.setSecret = exports.exportVariable = exports.ExitCode = void 0;
-const command_1 = __nccwpck_require__(351);
+const command_1 = __nccwpck_require__(241);
 const file_command_1 = __nccwpck_require__(717);
 const utils_1 = __nccwpck_require__(278);
 const os = __importStar(__nccwpck_require__(37));
@@ -2246,12 +2246,11 @@ const path = __nccwpck_require__(17);
  * @property {[string, string][]} keysToAdd
  * @property {[string, string][]} keysToRemove
  * @property {string[]} errors
- * 
+ *
  * @typedef {Object.<string, TranslationFileReport>} TranslationFileReportsMap
- * 
+ *
  * @typedef {Object.<string, TranslationFileReportsMap>} TranslationLocalesReportsMap
  */
-
 
 // most @actions toolkit packages have async methods
 async function run() {
@@ -2363,7 +2362,7 @@ async function prettyPringComparisonReport(comparisonReports, defaultLocale) {
 
   Object.entries(comparisonReports).forEach(([locale, reports]) => {
     const localeReportTitle = `Report for "${locale}":`;
-    core.startGroup(localeReportTitle);
+
     const output = [];
     let localErrors = false;
     Object.entries(reports).forEach(([path, report]) => {
@@ -2412,9 +2411,13 @@ async function prettyPringComparisonReport(comparisonReports, defaultLocale) {
     });
 
     if (localErrors) {
-      core.error(getStyledText(styles.redBright, localeReportTitle + ' ✖'));
+      core.startGroup(
+        getStyledText(styles.redBright, localeReportTitle + ' ✖')
+      );
     } else {
-      core.notice(getStyledText(styles.greenBright, localeReportTitle + ' ✓'));
+      core.startGroup(
+        getStyledText(styles.greenBright, localeReportTitle + ' ✓')
+      );
     }
     output.forEach(([msg, error]) =>
       error ? core.error(msg) : core.notice(msg)
