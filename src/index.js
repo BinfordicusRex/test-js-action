@@ -2,18 +2,9 @@ const core = require('@actions/core');
 const fs = require('fs');
 const path = require('path');
 
-/**
- * @typedef {Object} TranslationFileReport
- * @property {string} defaultLocale
- * @property {string} compareLocale
- * @property {[string, string][]} keysToAdd
- * @property {[string, string][]} keysToRemove
- * @property {string[]} errors
- *
- * @typedef {Object.<string, TranslationFileReport>} TranslationFileReportsMap
- *
- * @typedef {Object.<string, TranslationFileReportsMap>} TranslationLocalesReportsMap
- */
+const {prettyPrintComparisonReport} = require('./printTranslationsReport')
+/* eslint-disable-next-line no-unused-vars */
+const typedefs = require('./typedefs');
 
 // most @actions toolkit packages have async methods
 async function run() {
@@ -62,7 +53,7 @@ async function run() {
     }
 
     /**
-     * @type TranslationLocalesReportsMap
+     * @type typedefs.TranslationLocalesReportsMap
      */
     const comparisonReports = compareLocales.reduce((prev, locale) => {
       prev[locale] = compareTranslationsKeysForLocale(
@@ -75,127 +66,12 @@ async function run() {
       return prev;
     }, {});
 
-    await prettyPringComparisonReport(comparisonReports, defaultLocale);
+    await prettyPrintComparisonReport(comparisonReports, defaultLocale, compareBase);
 
     core.setOutput('comparisonReports', comparisonReports);
   } catch (error) {
     core.setFailed(error.message);
   }
-}
-
-/**
- *
- * @param {TranslationLocalesReportsMap>} comparisonReports
- * @returns Totals for comparison report
- */
-function getTotals(comparisonReports) {
-  return Object.values(comparisonReports).reduce(
-    (prevOuter, fileReports) =>
-      Object.values(fileReports).reduce((prev, fileReport) => {
-        prev.totalKeysToAdd += fileReport.keysToAdd.length;
-        prev.totalKeysToRemove += fileReport.keysToRemove.length;
-        return prev;
-      }, prevOuter),
-    {totalKeysToAdd: 0, totalKeysToRemove: 0}
-  );
-}
-
-/**
- *
- * @param {TranslationLocalesReportsMap} comparisonReports
- * @param {string} defaultLocale
- */
-async function prettyPringComparisonReport(comparisonReports, defaultLocale) {
-  const {default: styles} = await import('ansi-styles');
-  core.notice(
-    getStyledText(
-      styles.bold,
-      `Comparing languages against default locale: "${defaultLocale}"`
-    )
-  );
-
-  const {totalKeysToAdd, totalKeysToRemove} = getTotals(comparisonReports);
-
-  core.notice(
-    `Total keys to add: ${getStyledText(
-      styles.bold,
-      totalKeysToAdd
-    )}, Total keys to remove: ${getStyledText(styles.bold, totalKeysToRemove)}`
-  );
-
-  Object.entries(comparisonReports).forEach(([locale, reports]) => {
-    const localeReportTitle = `Report for "${locale}":`;
-
-    const output = [];
-    let localErrors = false;
-    Object.entries(reports).forEach(([path, report]) => {
-      const pathErrors =
-        report.errors.length > 0 ||
-        report.keysToAdd.length > 0 ||
-        report.keysToRemove.length > 0;
-      localErrors = localErrors || pathErrors;
-
-      const pathStyle = pathErrors ? styles.redBright : styles.greenBright;
-
-      output.push([
-        getStyledText(pathStyle, `  ${path} ${pathErrors ? '✖' : '✓'}`),
-        pathErrors,
-      ]);
-
-      if (report.errors.length > 0) {
-        output.push([getStyledText(pathStyle, `    Errors:`), pathErrors]);
-      }
-      report.errors.forEach((error) =>
-        output.push([getStyledText(pathStyle, `      ✖ ${error}`), pathErrors])
-      );
-
-      if (report.keysToAdd.length > 0) {
-        output.push([getStyledText(pathStyle, `    Keys to add:`), pathErrors]);
-      }
-      report.keysToAdd.forEach(([fullKey, fileKey]) =>
-        output.push([
-          getStyledText(pathStyle, `      + ${fullKey} (${fileKey})`),
-          pathErrors,
-        ])
-      );
-
-      if (report.keysToRemove.length > 0) {
-        output.push([
-          getStyledText(pathStyle, `    Keys to remove:`),
-          pathErrors,
-        ]);
-      }
-      report.keysToRemove.forEach(([fullKey, fileKey]) =>
-        output.push([
-          getStyledText(pathStyle, `      - ${fullKey} (${fileKey})`),
-          pathErrors,
-        ])
-      );
-    });
-
-    if (localErrors) {
-      core.startGroup(
-        getStyledText(styles.redBright, localeReportTitle + ' ✖')
-      );
-    } else {
-      core.startGroup(
-        getStyledText(styles.greenBright, localeReportTitle + ' ✓')
-      );
-    }
-    output.forEach(([msg, error]) =>
-      error ? core.error(msg) : core.notice(msg)
-    );
-    core.endGroup();
-  });
-}
-
-/**
- *
- * @param {{}}} style
- * @param {string} text
- */
-function getStyledText(style, text) {
-  return `${style.open}${text}${style.close}`;
 }
 
 function validateBaseFolderInput(baseFolderJSON) {
@@ -227,7 +103,7 @@ function compareTranslationsKeysForLocale(
   compareLocale
 ) {
   /**
-   * @type {Object.<string, TranslationFileReport}>}
+   * @type {Object.<string, typedefs.TranslationFileReport}>}
    */
   const pathToStringsReport = {};
 
@@ -250,7 +126,7 @@ function compareTranslationsKeysForLocale(
         );
 
         /**
-         * @type {TranslationFileReport}
+         * @type {typedefs.TranslationFileReport}
          */
         const fileReport = {
           defaultLocale,
