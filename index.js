@@ -9,12 +9,11 @@ const path = require('path');
  * @property {[string, string][]} keysToAdd
  * @property {[string, string][]} keysToRemove
  * @property {string[]} errors
- * 
+ *
  * @typedef {Object.<string, TranslationFileReport>} TranslationFileReportsMap
- * 
+ *
  * @typedef {Object.<string, TranslationFileReportsMap>} TranslationLocalesReportsMap
  */
-
 
 // most @actions toolkit packages have async methods
 async function run() {
@@ -126,7 +125,7 @@ async function prettyPringComparisonReport(comparisonReports, defaultLocale) {
 
   Object.entries(comparisonReports).forEach(([locale, reports]) => {
     const localeReportTitle = `Report for "${locale}":`;
-    core.startGroup(localeReportTitle);
+
     const output = [];
     let localErrors = false;
     Object.entries(reports).forEach(([path, report]) => {
@@ -175,9 +174,13 @@ async function prettyPringComparisonReport(comparisonReports, defaultLocale) {
     });
 
     if (localErrors) {
-      core.error(getStyledText(styles.redBright, localeReportTitle + ' ✖'));
+      core.startGroup(
+        getStyledText(styles.redBright, localeReportTitle + ' ✖')
+      );
     } else {
-      core.notice(getStyledText(styles.greenBright, localeReportTitle + ' ✓'));
+      core.startGroup(
+        getStyledText(styles.greenBright, localeReportTitle + ' ✓')
+      );
     }
     output.forEach(([msg, error]) =>
       error ? core.error(msg) : core.notice(msg)
